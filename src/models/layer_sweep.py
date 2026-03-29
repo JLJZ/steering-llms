@@ -66,7 +66,9 @@ def _get_composite_with_hook(
             hidden[-1, :] = hidden[-1, :] + vec
         else:
             hidden[:, -1, :] = hidden[:, -1, :] + vec
-        return (hidden,) + output[1:]
+        if isinstance(output, tuple):
+            return (hidden,) + output[1:]
+        return hidden
 
     def logit_hook(module, input, output):
         logits_store["logits"] = output.logits.detach()

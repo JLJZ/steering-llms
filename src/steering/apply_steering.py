@@ -70,7 +70,9 @@ class DecayingSteeringHook:
         else:
             hidden[:, -1, :] = hidden[:, -1, :] + vec
         self.token_count += 1
-        return (hidden,) + output[1:]
+        if isinstance(output, tuple):
+            return (hidden,) + output[1:]
+        return hidden
 
     def register(self, layer_module):
         self._handle = layer_module.register_forward_hook(self._hook_fn)
