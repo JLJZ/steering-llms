@@ -4,6 +4,7 @@ src/models/layer_sweep.py
 Per-layer selectivity sweep to identify the refusal-sensitive layer.
 See agents/LAYER_SWEEP.md for the full specification.
 """
+
 from __future__ import annotations
 
 import json
@@ -35,13 +36,13 @@ def refusal_composite(logits: torch.Tensor, tokenizer) -> float:
         return None
 
     sorry_id = _get_id(["▁Sorry", "Sorry"])
-    i_id     = _get_id(["▁I", "I"])
-    sure_id  = _get_id(["▁Sure", "Sure"])
+    i_id = _get_id(["▁I", "I"])
+    sure_id = _get_id(["▁Sure", "Sure"])
 
     probs = torch.softmax(logits[0, -1, :].float(), dim=-1)
     p_sorry = probs[sorry_id].item() if sorry_id is not None else 0.0
-    p_i     = probs[i_id].item()     if i_id is not None else 0.0
-    p_sure  = probs[sure_id].item()  if sure_id is not None else 0.0
+    p_i = probs[i_id].item() if i_id is not None else 0.0
+    p_sure = probs[sure_id].item() if sure_id is not None else 0.0
 
     return (p_sorry + p_i - p_sure) / 3.0
 
@@ -60,7 +61,11 @@ def _get_composite_with_hook(
 
     def hook(module, input, output):
         hidden = output[0]
-        hidden[:, -1, :] = hidden[:, -1, :] + alpha * vector.to(hidden.device)
+        vec = alpha * vector.to(hidden.device)
+        if hidden.dim() == 2:
+            hidden[-1, :] = hidden[-1, :] + vec
+        else:
+            hidden[:, -1, :] = hidden[:, -1, :] + vec
         return (hidden,) + output[1:]
 
     def logit_hook(module, input, output):
@@ -105,8 +110,10 @@ def run_layer_sweep(
     -------
     dict with keys: gaps, peak_layer, peak_gap, selectivity_slopes, anti_selective_layers
     """
-    logger.info(f"Starting layer sweep across {n_layers} layers "
-                f"({len(harmful_prompts)} harmful, {len(neutral_prompts)} neutral prompts)")
+    logger.info(
+        f"Starting layer sweep across {n_layers} layers "
+        f"({len(harmful_prompts)} harmful, {len(neutral_prompts)} neutral prompts)"
+    )
 
     gaps: dict[int, float] = {}
 
@@ -116,16 +123,18 @@ def run_layer_sweep(
 
         for prompt in harmful_prompts:
             try:
-                c = _get_composite_with_hook(model, tokenizer, prompt,
-                                              layer_idx, pilot_vector, alpha, device)
+                c = _get_composite_with_hook(
+                    model, tokenizer, prompt, layer_idx, pilot_vector, alpha, device
+                )
                 h_composites.append(c)
             except Exception as e:
                 logger.warning(f"Layer {layer_idx}, harmful prompt failed: {e}")
 
         for prompt in neutral_prompts:
             try:
-                c = _get_composite_with_hook(model, tokenizer, prompt,
-                                              layer_idx, pilot_vector, alpha, device)
+                c = _get_composite_with_hook(
+                    model, tokenizer, prompt, layer_idx, pilot_vector, alpha, device
+                )
                 n_composites.append(c)
             except Exception as e:
                 logger.warning(f"Layer {layer_idx}, neutral prompt failed: {e}")
@@ -150,9 +159,11 @@ def run_layer_sweep(
         )
 
     hypothesis_layer = int(0.41 * n_layers)
-    logger.info(f"Sweep complete | Peak: L{peak_layer} (gap={peak_gap:.5f}) | "
-                f"Hypothesis: L{hypothesis_layer} | "
-                f"Anti-selective layers: {anti_selective}")
+    logger.info(
+        f"Sweep complete | Peak: L{peak_layer} (gap={peak_gap:.5f}) | "
+        f"Hypothesis: L{hypothesis_layer} | "
+        f"Anti-selective layers: {anti_selective}"
+    )
 
     result = {
         "gaps": gaps,
@@ -169,8 +180,10 @@ def run_layer_sweep(
     }
 
     if len(anti_selective) / n_layers > 0.30:
-        logger.warning("More than 30% of layers are anti-selective. "
-                       "Improve contrastive pairs before proceeding.")
+        logger.warning(
+            "More than 30% of layers are anti-selective. "
+            "Improve contrastive pairs before proceeding."
+        )
 
     if results_dir:
         out = Path(results_dir)
