@@ -4,6 +4,7 @@ src/models/loader.py
 Model and tokenizer loading with architecture detection.
 Supports Qwen2.5, SmolLM2, and Phi-3 families.
 """
+
 from __future__ import annotations
 
 import logging
@@ -16,9 +17,21 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 logger = logging.getLogger(__name__)
 
 SUPPORTED_MODELS = {
-    "Qwen/Qwen2.5-0.5B-Instruct": {"n_layers": 24, "hidden_size": 896,  "depth_41pct": 9},
-    "Qwen/Qwen2.5-1B-Instruct":   {"n_layers": 28, "hidden_size": 1536, "depth_41pct": 11},
-    "HuggingFaceTB/SmolLM2-360M-Instruct": {"n_layers": 32, "hidden_size": 960, "depth_41pct": 13},
+    "Qwen/Qwen2.5-0.5B-Instruct": {
+        "n_layers": 24,
+        "hidden_size": 896,
+        "depth_41pct": 9,
+    },
+    "Qwen/Qwen2.5-1B-Instruct": {
+        "n_layers": 28,
+        "hidden_size": 1536,
+        "depth_41pct": 11,
+    },
+    "HuggingFaceTB/SmolLM2-360M-Instruct": {
+        "n_layers": 32,
+        "hidden_size": 960,
+        "depth_41pct": 13,
+    },
 }
 
 
@@ -27,7 +40,7 @@ class ModelConfig:
     model_id: str
     n_layers: int
     hidden_size: int
-    hypothesis_layer: int   # ~41% depth — predicted refusal-sensitive layer
+    hypothesis_layer: int  # ~41% depth — predicted refusal-sensitive layer
     layer_module_path: str  # e.g. "model.layers" for Qwen2.5
 
 
@@ -88,8 +101,10 @@ def load_model(
     # Validate tokenizer has refusal tokens
     _validate_refusal_tokens(tokenizer, model_id)
 
-    logger.info(f"Loaded {model_id}: {config.n_layers} layers, "
-                f"hypothesis target layer: L{config.hypothesis_layer}")
+    logger.info(
+        f"Loaded {model_id}: {config.n_layers} layers, "
+        f"hypothesis target layer: L{config.hypothesis_layer}"
+    )
     return model, tokenizer, config
 
 
@@ -129,8 +144,11 @@ def collect_activation(
     activation: dict = {}
 
     def hook(module, input, output):
-        hidden = output[0]  # (batch, seq_len, hidden_size)
-        activation["hidden"] = hidden[:, token_position, :].detach().float()
+        hidden = output[0]  # (batch, seq_len, hidden_size) or (seq_len, hidden_size)
+        if hidden.dim() == 2:
+            activation["hidden"] = hidden[token_position, :].detach().float()
+        else:
+            activation["hidden"] = hidden[:, token_position, :].detach().float()
 
     handle = get_layer(model, layer_idx).register_forward_hook(hook)
     try:
