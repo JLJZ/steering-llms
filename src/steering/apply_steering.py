@@ -63,6 +63,9 @@ class DecayingSteeringHook:
             self.token_count += 1
             return output  # effectively zero; skip computation
         hidden = output[0]
+        if hidden.shape[-1] != self.vector.shape[0]:
+            self.token_count += 1
+            return output
         # Only modify last token position (current generation step)
         vec = alpha_t * self.vector.to(hidden.device)
         if hidden.dim() == 2:

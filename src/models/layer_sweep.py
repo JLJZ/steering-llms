@@ -61,6 +61,8 @@ def _get_composite_with_hook(
 
     def hook(module, input, output):
         hidden = output[0]
+        if hidden.shape[-1] != vector.shape[0]:
+            return output
         vec = alpha * vector.to(hidden.device)
         if hidden.dim() == 2:
             hidden[-1, :] = hidden[-1, :] + vec
