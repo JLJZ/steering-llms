@@ -57,15 +57,15 @@ class DecayingSteeringHook:
         self.token_count = 0
         self._handle = None
 
-    def _hook_fn(self, module, input, output):
+    def _pre_hook_fn(self, module, input):
         alpha_t = self.alpha_0 * math.exp(-self.decay_lambda * self.token_count)
         if alpha_t < 1e-6:
             self.token_count += 1
-            return output
-        hidden = output[0]
-        if hidden.dim() not in (2, 3) or hidden.shape[-1] != self.vector.shape[0]:
+            return input
+        hidden = input[0]
+        if hidden.shape[-1] != self.vector.shape[0]:
             self.token_count += 1
-            return output
+            return input
         # Only modify last token position (current generation step)
         hidden = hidden.clone()
         vec = alpha_t * self.vector.to(hidden.device)
@@ -74,12 +74,10 @@ class DecayingSteeringHook:
         else:
             hidden[:, -1, :] += vec
         self.token_count += 1
-        if isinstance(output, tuple):
-            return (hidden,) + output[1:]
-        return hidden
+        return (hidden,) + input[1:]
 
     def register(self, layer_module):
-        self._handle = layer_module.register_forward_hook(self._hook_fn)
+        self._handle = layer_module.register_forward_pre_hook(self._pre_hook_fn)
 
     def remove(self):
         if self._handle is not None:

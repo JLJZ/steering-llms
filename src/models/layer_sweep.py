@@ -59,24 +59,22 @@ def _get_composite_with_hook(
     """Run forward pass with a steering hook and return refusal_composite."""
     logits_store: dict = {}
 
-    def hook(module, input, output):
-        hidden = output[0]
-        if hidden.dim() not in (2, 3) or hidden.shape[-1] != vector.shape[0]:
-            return output
+    def pre_hook(module, input):
+        hidden = input[0]
+        if hidden.shape[-1] != vector.shape[0]:
+            return input
         hidden = hidden.clone()
         vec = alpha * vector.to(hidden.device)
         if hidden.dim() == 2:
             hidden[-1, :] += vec
         else:
             hidden[:, -1, :] += vec
-        if isinstance(output, tuple):
-            return (hidden,) + output[1:]
-        return hidden
+        return (hidden,) + input[1:]
 
     def logit_hook(module, input, output):
         logits_store["logits"] = output.logits.detach()
 
-    h1 = get_layer(model, layer_idx).register_forward_hook(hook)
+    h1 = get_layer(model, layer_idx).register_forward_pre_hook(pre_hook)
     h2 = model.register_forward_hook(logit_hook)
     try:
         with torch.no_grad():
